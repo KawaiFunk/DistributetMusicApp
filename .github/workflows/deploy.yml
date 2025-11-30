@@ -24,17 +24,17 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr # This step outputs the registry URI
         uses: aws-actions/amazon-ecr-login@v1
-      
-      # --- Build Gateway ---
-      - name: Build and Push Gateway
-        env:
-          ECR_REPO: ${{ secrets.ECR_REPOSITORY_GATEWAY }}
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }} # <<< MOVED & FIXED
-        run: |
-          # We build from the ROOT (.) but point to the deep Dockerfile
-          docker build -t $ECR_REGISTRY/$ECR_REPO:latest \
-            -f ApiGateway/src/Presentation/ApiGateway.Api/Dockerfile .
-          docker push $ECR_REGISTRY/$ECR_REPO:latest
+          
+          # --- Build Gateway ---
+                - name: Build and Push Gateway
+                env:
+                  ECR_REPO: ${{ secrets.ECR_REPOSITORY_GATEWAY }}
+                  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+                run: |
+                  # Correct path for Dockerfile
+                  docker build -t $ECR_REGISTRY/$ECR_REPO:latest \
+                    -f ApiGateway.Api/Dockerfile . # <<< CORRECTED PATH
+                  docker push $ECR_REGISTRY/$ECR_REPO:latest
       
       # --- Build Catalog ---
       - name: Build and Push Catalog
@@ -44,7 +44,7 @@ jobs:
         run: |
           # Note the 'c' typo in the path
           docker build -t $ECR_REGISTRY/$ECR_REPO:latest \
-            -f CatalogService/src/Presentation/CatalogServicec.Api/Dockerfile .
+            -f CatalogServicec.Api/Dockerfile .
           docker push $ECR_REGISTRY/$ECR_REPO:latest
       
       # --- Deploy to K8s ---
