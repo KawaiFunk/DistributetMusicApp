@@ -1,0 +1,134 @@
+﻿version: "3.9"
+
+services:
+  apigateway.api:
+    container_name: apigateway.api
+    image: apigateway.api
+    build:
+      context: .
+      dockerfile: ApiGateway.Api/Dockerfile
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080;http://+:8081"
+      Redis__Host: "redis"
+      Redis__Port: "6379"
+      Redis__Db: "0"
+    depends_on:
+      - redis
+      - catalogservice.api
+      - catalogservice2.api
+    networks:
+      - backend
+
+  catalogservice.api:
+    container_name: catalogservice.api
+    image: catalogservice.api
+    build:
+      context: .
+      dockerfile: CatalogServicec.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+      # replica set connection string
+      MongoDbSettings__ConnectionString: "mongodb://mongo1:27017,mongo2:27017,mongo3:27017/GatewayDb?replicaSet=rs0"
+      MongoDbSettings__DatabaseName: "GatewayDb"
+    ports:
+      - "5002:8080"
+    depends_on: 
+      - mongo1
+      - mongo2
+      - mongo3
+      - mongo-rs-init
+    networks:
+      - backend
+
+  catalogservice2.api:
+    container_name: catalogservice2.api
+    image: catalogservice.api
+    build:  
+      context: .
+      dockerfile: CatalogServicec.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+      # replica set connection string
+      MongoDbSettings__ConnectionString: "mongodb://mongo1:27017,mongo2:27017,mongo3:27017/GatewayDb?replicaSet=rs0"
+      MongoDbSettings__DatabaseName: "GatewayDb"
+    ports:
+      - "5003:8080"
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+      - mongo-rs-init
+    networks:
+      - backend
+
+  # ===== Mongo Replica Set =====
+  mongo1:
+    image: mongo:8
+    container_name: mongo1
+    command: [ "mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017" ]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo1_data:/data/db
+    networks: [ backend ]
+
+  mongo2:
+    image: mongo:8
+    container_name: mongo2
+    command: [ "mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017" ]
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo2_data:/data/db
+    networks: [ backend ]
+
+  mongo3:
+    image: mongo:8
+    container_name: mongo3
+    command: [ "mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017" ]
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo3_data:/data/db
+    networks: [ backend ]
+
+  mongo-rs-init:
+    image: mongo:8
+    container_name: mongo-rs-init
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+    networks:
+      - backend
+    entrypoint: [
+      "bash", "-c",
+      "sleep 15 && \
+       mongosh --host mongo1:27017 --eval 'try { rs.status() } catch (e) { rs.initiate({ _id: \"rs0\", members: [ { _id: 0, host: \"mongo1:27017\" }, { _id: 1, host: \"mongo2:27017\" }, { _id: 2, host: \"mongo3:27017\" } ] }) }'"
+    ]
+  
+  
+  # ===== Redis =====
+  redis:
+    image: redis:7-alpine
+    container_name: gateway_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+    restart: unless-stopped
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  mongo1_data:
+  mongo2_data:
+  mongo3_data:
