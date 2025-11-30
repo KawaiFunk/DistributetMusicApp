@@ -54,7 +54,7 @@ spec:
         resources:
           requests:
             storage: 5Gi
-        # storageClassName: standard # EKS usually handles this default
+        storageClassName: ebs-sc-csi # Explicitly define the correct storage class
 ---
 # ============ MongoDB Initialization Job (Runs once to set up Replica Set) ============
 apiVersion: batch/v1
