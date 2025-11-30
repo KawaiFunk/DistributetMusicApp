@@ -1,0 +1,91 @@
+﻿# ============ MongoDB Service (Headless Service for StatefulSet DNS) ============
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  namespace: distributetmusicapp
+spec:
+  clusterIP: None # Makes this a Headless Service for ordered DNS (mongo-0, mongo-1, etc.)
+  selector:
+    app: mongo
+  ports:
+    - port: 27017
+      targetPort: 27017
+---
+# ============ MongoDB StatefulSet (3 Instances + Persistent Storage) ============
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  namespace: distributetmusicapp
+spec:
+  serviceName: "mongo"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:8
+          command:
+            # Command to run MongoDB as part of the Replica Set 'rs0'
+            - "mongod"
+            - "--replSet"
+            - "rs0"
+            - "--bind_ip_all"
+            - "--port"
+            - "27017"
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongo-data
+              mountPath: /data/db
+  # This section requests 5GB of storage per pod (EBS volumes on AWS EKS)
+  volumeClaimTemplates:
+    - metadata:
+        name: mongo-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 5Gi
+        # storageClassName: standard # EKS usually handles this default
+---
+# ============ MongoDB Initialization Job (Runs once to set up Replica Set) ============
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongo-rs-init
+  namespace: distributetmusicapp
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mongo-rs-init
+          image: mongo:8
+          command:
+            - "bash"
+            - "-c"
+            - |
+              echo "Waiting for MongoDB pods to start..."
+              sleep 20 # Give Mongo pods time to initialize their storage
+              mongosh --host mongo-0.mongo:27017 <<EOF
+              try {
+                rs.status()
+              } catch (e) {
+                rs.initiate({
+                  _id: "rs0",
+                  members: [
+                    { _id: 0, host: "mongo-0.mongo:27017" },
+                    { _id: 1, host: "mongo-1.mongo:27017" },
+                    { _id: 2, host: "mongo-2.mongo:27017" }
+                  ]
+                })
+              }
+              EOF

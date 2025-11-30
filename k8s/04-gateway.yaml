@@ -1,0 +1,117 @@
+﻿# ============ Ocelot ConfigMap (Internal configuration for routing/caching) ============
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ocelot-config
+  namespace: distributetmusicapp
+data:
+  ocelot.json: |
+    {
+      "Routes": [
+        {
+          "UpstreamPathTemplate": "/{everything}",
+          "UpstreamHttpMethod": [ "GET" ],
+          "DownstreamPathTemplate": "/{everything}",
+          "DownstreamScheme": "http",
+          "DownstreamHostAndPorts": [
+            {
+              "Host": "catalogservice",
+              "Port": 8080
+            }
+          ],
+          "LoadBalancerOptions": { "Type": "RoundRobin" },
+          "FileCacheOptions": {
+            "TtlSeconds": 15,
+            "Region": "catalog-get"
+          },
+          "RateLimitOptions": {
+            "EnableRateLimiting": true,
+            "Period": "10s",
+            "Limit": 3
+          },
+          "Key": "catalog-get-cached"
+        },
+        {
+          "UpstreamPathTemplate": "/{everything}",
+          "UpstreamHttpMethod": [ "POST", "PUT", "DELETE", "PATCH" ],
+          "DownstreamPathTemplate": "/{everything}",
+          "DownstreamScheme": "http",
+          "DownstreamHostAndPorts": [
+            {
+              "Host": "catalogservice",
+              "Port": 8080
+            }
+          ],
+          "LoadBalancerOptions": { "Type": "RoundRobin" },
+          "Key": "catalog-write-no-cache"
+        }
+      ],
+      "GlobalConfiguration": {
+        "BaseUrl": "http://apigateway:8080",
+        "RateLimitOptions": {
+          "ClientIdHeader": "MyRateLimiting",
+          "DisableRateLimitHeaders": false,
+          "HttpStatusCode": 418,
+          "QuotaExceededMessage": "Customize Tips!",
+          "RateLimitCounterPrefix": "ocelot"
+        }
+      }
+    }
+---
+# ================== ApiGateway Deployment ==================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apigateway
+  namespace: distributetmusicapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: apigateway
+  template:
+    metadata:
+      labels:
+        app: apigateway
+    spec:
+      containers:
+        - name: apigateway
+          # >>> CHANGE THIS TO YOUR ECR URI <<<
+          image: 071784445773.dkr.ecr.eu-north-1.amazonaws.com/musicapp-apigateway
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+            - name: Redis__Host
+              value: "redis" # Points to the Redis Service in K8s
+            - name: Redis__Port
+              value: "6379"
+            - name: Redis__Db
+              value: "0"
+          volumeMounts:
+            - name: ocelot-config
+              mountPath: /app/ocelot.json
+              subPath: ocelot.json
+      volumes:
+        - name: ocelot-config
+          configMap:
+            name: ocelot-config
+---
+# ============ ApiGateway Service (Public Load Balancer) ============
+apiVersion: v1
+kind: Service
+metadata:
+  name: apigateway
+  namespace: distributetmusicapp
+spec:
+  selector:
+    app: apigateway
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: LoadBalancer # This creates a public AWS ELB (Load Balancer)

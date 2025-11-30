@@ -1,0 +1,73 @@
+﻿name: Deploy to AWS
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      # --- Build Gateway ---
+      - name: Build and Push Gateway
+        env:
+          ECR_REPO: ${{ secrets.ECR_REPOSITORY_GATEWAY }}
+        run: |
+          # We build from the ROOT (.) but point to the deep Dockerfile
+          docker build -t $ECR_REGISTRY/$ECR_REPO:latest \
+            -f ApiGateway/src/Presentation/ApiGateway.Api/Dockerfile .
+          docker push $ECR_REGISTRY/$ECR_REPO:latest
+      
+      # --- Build Catalog ---
+      - name: Build and Push Catalog
+        env:
+          ECR_REPO: ${{ secrets.ECR_REPOSITORY_CATALOG }}
+        run: |
+          # Note the 'c' typo in the path
+          docker build -t $ECR_REGISTRY/$ECR_REPO:latest \
+            -f CatalogService/src/Presentation/CatalogServicec.Api/Dockerfile .
+          docker push $ECR_REGISTRY/$ECR_REPO:latest
+      
+      # --- Deploy to K8s ---
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Update KubeConfig
+        # REPLACE 'my-music-cluster' with your actual cluster name
+        run: aws eks update-kubeconfig --name my-music-cluster --region ${{ secrets.AWS_REGION }}
+
+      - name: Apply Kubernetes Manifests
+        run: |
+          # We apply the files inside your 'k8s' folder
+          kubectl apply -f k8s/05-namespace.yaml
+          kubectl apply -f k8s/01-mongo.yaml
+          kubectl apply -f k8s/02-redis.yaml
+          
+          # We need to force K8s to pull the new image we just built
+          kubectl rollout restart deployment apigateway -n distributetmusicapp
+          kubectl rollout restart deployment catalogservice -n distributetmusicapp
+          
+          # Apply the app services last
+          kubectl apply -f k8s/03-catalog.yaml
+          kubectl apply -f k8s/04-gateway.yaml

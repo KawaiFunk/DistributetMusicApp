@@ -1,0 +1,48 @@
+﻿# ============ CatalogService Deployment (Replicas: 2) ============
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogservice
+  namespace: distributetmusicapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: catalogservice
+  template:
+    metadata:
+      labels:
+        app: catalogservice
+    spec:
+      containers:
+        - name: catalogservice
+          # >>> CHANGE THIS TO YOUR ECR URI <<<
+          image: 071784445773.dkr.ecr.eu-north-1.amazonaws.com/musicapp-catalogservice
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production" # Changed to production for deployment
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+            # Connection string points to the K8s MongoDB Replica Set
+            - name: MongoDbSettings__ConnectionString
+              value: "mongodb://mongo-0.mongo:27017,mongo-1.mongo:27017,mongo-2.mongo:27017/GatewayDb?replicaSet=rs0"
+            - name: MongoDbSettings__DatabaseName
+              value: "GatewayDb"
+---
+# ============ CatalogService Service (Internal DNS name: 'catalogservice') ============
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalogservice
+  namespace: distributetmusicapp
+spec:
+  selector:
+    app: catalogservice
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP
