@@ -1,4 +1,4 @@
-﻿# ============ Ocelot ConfigMap (Internal configuration for routing/caching) ============
+﻿# ============ 04-gateway.yaml (ConfigMap) ============
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -15,20 +15,13 @@ data:
           "DownstreamScheme": "http",
           "DownstreamHostAndPorts": [
             {
-              "Host": "catalogservice",
+              "Host": "catalogservice", # Correct internal DNS name
               "Port": 8080
             }
           ],
           "LoadBalancerOptions": { "Type": "RoundRobin" },
-          "FileCacheOptions": {
-            "TtlSeconds": 15,
-            "Region": "catalog-get"
-          },
-          "RateLimitOptions": {
-            "EnableRateLimiting": true,
-            "Period": "10s",
-            "Limit": 3
-          },
+          "FileCacheOptions": { "TtlSeconds": 15, "Region": "catalog-get" },
+          "RateLimitOptions": { "EnableRateLimiting": true, "Period": "10s", "Limit": 3 },
           "Key": "catalog-get-cached"
         },
         {
@@ -38,7 +31,7 @@ data:
           "DownstreamScheme": "http",
           "DownstreamHostAndPorts": [
             {
-              "Host": "catalogservice",
+              "Host": "catalogservice", # Correct internal DNS name
               "Port": 8080
             }
           ],
@@ -58,14 +51,14 @@ data:
       }
     }
 ---
-# ================== ApiGateway Deployment ==================
+# ============ 04-gateway.yaml (Deployment) ============
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: apigateway
   namespace: distributetmusicapp
 spec:
-  replicas: 1 
+  replicas: 1
   selector:
     matchLabels:
       app: apigateway
@@ -76,8 +69,7 @@ spec:
     spec:
       containers:
         - name: apigateway
-          # >>> CHANGE THIS TO YOUR ECR URI <<<
-          image: 071784445773.dkr.ecr.eu-north-1.amazonaws.com/musicapp-apigateway
+          image: 071784445773.dkr.ecr.eu-north-1.amazonaws.com/musicapp-apigateway # REMEMBER TO USE YOUR ECR URI
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -87,7 +79,7 @@ spec:
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
             - name: Redis__Host
-              value: "redis" # Points to the Redis Service in K8s
+              value: "redis" # Points to the Redis Service
             - name: Redis__Port
               value: "6379"
             - name: Redis__Db
@@ -101,7 +93,7 @@ spec:
           configMap:
             name: ocelot-config
 ---
-# ============ ApiGateway Service (Public Load Balancer) ============
+# ============ 04-gateway.yaml (Service) ============
 apiVersion: v1
 kind: Service
 metadata:
@@ -114,4 +106,4 @@ spec:
     - port: 8080
       targetPort: 8080
       protocol: TCP
-  type: LoadBalancer # This creates a public AWS ELB (Load Balancer)
+  type: LoadBalancer # Creates the public AWS ELB

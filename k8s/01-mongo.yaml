@@ -1,18 +1,18 @@
-﻿# ============ MongoDB Service (Headless Service for StatefulSet DNS) ============
+﻿# ============ 01-mongo.yaml (Headless Service) ============
 apiVersion: v1
 kind: Service
 metadata:
   name: mongo
   namespace: distributetmusicapp
 spec:
-  clusterIP: None # Makes this a Headless Service for ordered DNS (mongo-0, mongo-1, etc.)
+  clusterIP: None
   selector:
     app: mongo
   ports:
     - port: 27017
       targetPort: 27017
 ---
-# ============ MongoDB StatefulSet (3 Instances + Persistent Storage) ============
+# ============ 01-mongo.yaml (StatefulSet) - CRITICAL FIX APPLIED ============
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -33,7 +33,6 @@ spec:
         - name: mongo
           image: mongo:8
           command:
-            # Command to run MongoDB as part of the Replica Set 'rs0'
             - "mongod"
             - "--replSet"
             - "rs0"
@@ -45,7 +44,6 @@ spec:
           volumeMounts:
             - name: mongo-data
               mountPath: /data/db
-  # This section requests 5GB of storage per pod (EBS volumes on AWS EKS)
   volumeClaimTemplates:
     - metadata:
         name: mongo-data
@@ -54,9 +52,10 @@ spec:
         resources:
           requests:
             storage: 5Gi
-        storageClassName: ebs-sc-csi # Explicitly define the correct storage class
+        # FIX: Explicitly set StorageClass to one that is guaranteed to work (EKS default)
+        storageClassName: gp2
 ---
-# ============ MongoDB Initialization Job (Runs once to set up Replica Set) ============
+# ============ 01-mongo.yaml (Initialization Job) - SAFETY FIX APPLIED ============
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -74,7 +73,7 @@ spec:
             - "-c"
             - |
               echo "Waiting for MongoDB pods to start..."
-              sleep 20 # Give Mongo pods time to initialize their storage
+              sleep 60 # SAFETY FIX: Increased time for volume provisioning and pod startup
               mongosh --host mongo-0.mongo:27017 <<EOF
               try {
                 rs.status()
@@ -89,3 +88,4 @@ spec:
                 })
               }
               EOF
+---

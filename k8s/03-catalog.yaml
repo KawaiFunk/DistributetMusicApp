@@ -1,4 +1,4 @@
-﻿# ============ CatalogService Deployment (Replicas: 2) ============
+﻿# ============ 03-catalog.yaml (Deployment) - DNS FIX CONFIRMED ============
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,23 +16,22 @@ spec:
     spec:
       containers:
         - name: catalogservice
-          # >>> CHANGE THIS TO YOUR ECR URI <<<
-          image: 071784445773.dkr.ecr.eu-north-1.amazonaws.com/musicapp-catalogservice
+          image: 071784445773.dkr.ecr.eu-north-1.amazonaws.com/musicapp-catalogservice # REMEMBER TO USE YOUR ECR URI
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
           env:
             - name: ASPNETCORE_ENVIRONMENT
-              value: "Production" # Changed to production for deployment
+              value: "Production"
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
-            # Connection string points to the K8s MongoDB Replica Set
+            # FIX CONFIRMED: Uses Kubernetes DNS names
             - name: MongoDbSettings__ConnectionString
               value: "mongodb://mongo-0.mongo:27017,mongo-1.mongo:27017,mongo-2.mongo:27017/GatewayDb?replicaSet=rs0"
             - name: MongoDbSettings__DatabaseName
               value: "GatewayDb"
 ---
-# ============ CatalogService Service (Internal DNS name: 'catalogservice') ============
+# ============ 03-catalog.yaml (Service) ============
 apiVersion: v1
 kind: Service
 metadata:
@@ -46,3 +45,4 @@ spec:
       targetPort: 8080
       protocol: TCP
   type: ClusterIP
+---

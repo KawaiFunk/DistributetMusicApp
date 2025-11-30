@@ -1,4 +1,4 @@
-﻿# ================== Redis Deployment ==================
+﻿# ================== 02-redis.yaml (Deployment) ==================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,7 +20,7 @@ spec:
           ports:
             - containerPort: 6379
 ---
-# ================== Redis Service (Internal DNS name: 'redis') ==================
+# ================== 02-redis.yaml (Service) ==================
 apiVersion: v1
 kind: Service
 metadata:
@@ -34,3 +34,4 @@ spec:
       targetPort: 6379
       protocol: TCP
   type: ClusterIP
+---
