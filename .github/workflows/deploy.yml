@@ -54,12 +54,33 @@ jobs:
       - name: Update KubeConfig
         run: aws eks update-kubeconfig --name my-music-cluster --region ${{ secrets.AWS_REGION }}
 
+      # --- CLEANUP: Remove old Mongo resources if they exist ---
+      - name: Cleanup old Mongo StatefulSet and PVCs
+        run: |
+          # Delete StatefulSet without waiting (allows recreation)
+          kubectl delete statefulset mongo -n distributetmusicapp --ignore-not-found=true --wait=false
+          
+          # Delete old PVCs with old StorageClass
+          kubectl delete pvc mongo-data-mongo-0 -n distributetmusicapp --ignore-not-found=true
+          kubectl delete pvc mongo-data-mongo-1 -n distributetmusicapp --ignore-not-found=true
+          kubectl delete pvc mongo-data-mongo-2 -n distributetmusicapp --ignore-not-found=true
+          
+          # Delete init job so it can run fresh
+          kubectl delete job mongo-rs-init -n distributetmusicapp --ignore-not-found=true
+          
+          # Wait a bit for cleanup
+          sleep 10
+
       - name: Apply Kubernetes Manifests
         run: |
           # Apply Infrastructure
           kubectl apply -f k8s/05-namespace.yaml
           kubectl apply -f k8s/01-mongo.yaml
           kubectl apply -f k8s/02-redis.yaml
+          
+          # Wait for Mongo pods to be ready before deploying services
+          echo "Waiting for MongoDB StatefulSet to be ready..."
+          kubectl wait --for=condition=ready pod -l app=mongo -n distributetmusicapp --timeout=300s || true
           
           # Apply Services/Deployments
           kubectl apply -f k8s/03-catalog.yaml
@@ -68,3 +89,7 @@ jobs:
           # Force a restart to pull the freshly built images
           kubectl rollout restart deployment apigateway -n distributetmusicapp
           kubectl rollout restart deployment catalogservice -n distributetmusicapp
+          
+          # Wait for rollouts to complete
+          kubectl rollout status deployment apigateway -n distributetmusicapp --timeout=300s
+          kubectl rollout status deployment catalogservice -n distributetmusicapp --timeout=300s
