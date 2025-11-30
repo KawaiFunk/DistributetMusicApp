@@ -5,8 +5,6 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-# REMOVED the problematic 'ECR_REGISTRY' definition from here
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -22,27 +20,27 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr # This step outputs the registry URI
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-          
-          # --- Build Gateway ---
-                - name: Build and Push Gateway
-                env:
-                  ECR_REPO: ${{ secrets.ECR_REPOSITORY_GATEWAY }}
-                  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-                run: |
-                  # Correct path for Dockerfile
-                  docker build -t $ECR_REGISTRY/$ECR_REPO:latest \
-                    -f ApiGateway.Api/Dockerfile . # <<< CORRECTED PATH
-                  docker push $ECR_REGISTRY/$ECR_REPO:latest
+      
+      # --- Build Gateway ---
+      - name: Build and Push Gateway
+        env:
+          ECR_REPO: ${{ secrets.ECR_REPOSITORY_GATEWAY }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          # Use the confirmed flat path
+          docker build -t $ECR_REGISTRY/$ECR_REPO:latest \
+            -f ApiGateway.Api/Dockerfile . 
+          docker push $ECR_REGISTRY/$ECR_REPO:latest
       
       # --- Build Catalog ---
       - name: Build and Push Catalog
         env:
           ECR_REPO: ${{ secrets.ECR_REPOSITORY_CATALOG }}
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }} # <<< MOVED & FIXED
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          # Note the 'c' typo in the path
+          # Use the confirmed flat path
           docker build -t $ECR_REGISTRY/$ECR_REPO:latest \
             -f CatalogServicec.Api/Dockerfile .
           docker push $ECR_REGISTRY/$ECR_REPO:latest
@@ -54,20 +52,19 @@ jobs:
           version: 'latest'
 
       - name: Update KubeConfig
-        # REPLACE 'my-music-cluster' with your actual cluster name
         run: aws eks update-kubeconfig --name my-music-cluster --region ${{ secrets.AWS_REGION }}
 
       - name: Apply Kubernetes Manifests
         run: |
-          # Apply Namespace, Mongo, and Redis first
+          # Apply Infrastructure
           kubectl apply -f k8s/05-namespace.yaml
           kubectl apply -f k8s/01-mongo.yaml
           kubectl apply -f k8s/02-redis.yaml
           
-          # Apply the app services
+          # Apply Services/Deployments
           kubectl apply -f k8s/03-catalog.yaml
           kubectl apply -f k8s/04-gateway.yaml
           
-          # Restart deployments to ensure new images are pulled immediately
+          # Force a restart to pull the freshly built images
           kubectl rollout restart deployment apigateway -n distributetmusicapp
           kubectl rollout restart deployment catalogservice -n distributetmusicapp
