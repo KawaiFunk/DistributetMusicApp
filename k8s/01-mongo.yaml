@@ -12,7 +12,7 @@ spec:
     - port: 27017
       targetPort: 27017
 ---
-# ============ 01-mongo.yaml (StatefulSet) - CRITICAL FIX APPLIED ============
+# ============ 01-mongo.yaml (StatefulSet) - FIXED FOR EBS-CSI ============
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -52,8 +52,8 @@ spec:
         resources:
           requests:
             storage: 5Gi
-        # FIX: Explicitly set StorageClass to one that is guaranteed to work (EKS default)
-        storageClassName: gp2
+        # FIXED: Use the default EBS CSI driver StorageClass
+        storageClassName: ebs-sc-csi
 ---
 # ============ 01-mongo.yaml (Initialization Job) - SAFETY FIX APPLIED ============
 apiVersion: batch/v1
@@ -73,7 +73,7 @@ spec:
             - "-c"
             - |
               echo "Waiting for MongoDB pods to start..."
-              sleep 60 # SAFETY FIX: Increased time for volume provisioning and pod startup
+              sleep 60
               mongosh --host mongo-0.mongo:27017 <<EOF
               try {
                 rs.status()
@@ -88,4 +88,3 @@ spec:
                 })
               }
               EOF
----
