@@ -65,7 +65,7 @@ metadata:
   name: apigateway
   namespace: distributetmusicapp
 spec:
-  replicas: 1
+  replicas: 1 
   selector:
     matchLabels:
       app: apigateway
