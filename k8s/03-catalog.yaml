@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: catalogservice
-          image: 071784445773.dkr.ecr.eu-north-1.amazonaws.com/musicapp-catalogservice # REMEMBER TO USE YOUR ECR URI
+          image: PLACEHOLDER_ECR_REGISTRY/musicapp-catalogservice:latest  # Will be replaced by GitHub Actions
           imagePullPolicy: Always
           ports:
             - containerPort: 8080

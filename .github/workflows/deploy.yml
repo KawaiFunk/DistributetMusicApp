@@ -1,4 +1,4 @@
-﻿name: Deploy to AWS
+name: Deploy to AWS
 
 on:
   push:
@@ -22,29 +22,27 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-      
+
       # --- Build Gateway ---
       - name: Build and Push Gateway
         env:
           ECR_REPO: ${{ secrets.ECR_REPOSITORY_GATEWAY }}
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          # Use the confirmed flat path
           docker build -t $ECR_REGISTRY/$ECR_REPO:latest \
-            -f ApiGateway.Api/Dockerfile . 
+            -f ApiGateway.Api/Dockerfile .
           docker push $ECR_REGISTRY/$ECR_REPO:latest
-      
+
       # --- Build Catalog ---
       - name: Build and Push Catalog
         env:
           ECR_REPO: ${{ secrets.ECR_REPOSITORY_CATALOG }}
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          # Use the confirmed flat path
           docker build -t $ECR_REGISTRY/$ECR_REPO:latest \
-            -f CatalogServicec.Api/Dockerfile .
+            -f CatalogService.Api/Dockerfile .
           docker push $ECR_REGISTRY/$ECR_REPO:latest
-      
+
       # --- Deploy to K8s ---
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
@@ -52,44 +50,66 @@ jobs:
           version: 'latest'
 
       - name: Update KubeConfig
-        run: aws eks update-kubeconfig --name my-music-cluster --region ${{ secrets.AWS_REGION }}
+        run: aws eks update-kubeconfig --name distributetmusicapp-cluster --region ${{ secrets.AWS_REGION }}
 
-      # --- CLEANUP: Remove old Mongo resources if they exist ---
-      - name: Cleanup old Mongo StatefulSet and PVCs
+      # --- Update image references in manifests ---
+      - name: Update K8s manifests with ECR registry
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          # Delete StatefulSet without waiting (allows recreation)
-          kubectl delete statefulset mongo -n distributetmusicapp --ignore-not-found=true --wait=false
-          
-          # Delete old PVCs with old StorageClass
-          kubectl delete pvc mongo-data-mongo-0 -n distributetmusicapp --ignore-not-found=true
-          kubectl delete pvc mongo-data-mongo-1 -n distributetmusicapp --ignore-not-found=true
-          kubectl delete pvc mongo-data-mongo-2 -n distributetmusicapp --ignore-not-found=true
-          
-          # Delete init job so it can run fresh
+          # Update catalog deployment
+          sed -i "s|image: PLACEHOLDER_ECR_REGISTRY/musicapp-catalogservice:latest.*|image: $ECR_REGISTRY/musicapp-catalogservice:latest|" k8s/03-catalog.yaml
+
+          # Update gateway deployment
+          sed -i "s|image: PLACEHOLDER_ECR_REGISTRY/musicapp-apigateway:latest.*|image: $ECR_REGISTRY/musicapp-apigateway:latest|" k8s/04-gateway.yaml
+
+      # --- SAFE CLEANUP: Only delete init job, not StatefulSet/PVCs ---
+      - name: Cleanup MongoDB init job (safe)
+        run: |
+          # Only delete init job to allow it to run fresh
+          # Do NOT delete StatefulSet or PVCs to prevent data loss
           kubectl delete job mongo-rs-init -n distributetmusicapp --ignore-not-found=true
-          
-          # Wait a bit for cleanup
-          sleep 10
+
+          # Wait for cleanup
+          sleep 5
 
       - name: Apply Kubernetes Manifests
         run: |
-          # Apply Infrastructure
+          # Apply in order
           kubectl apply -f k8s/05-namespace.yaml
+          kubectl apply -f k8s/00-storageclass.yaml
           kubectl apply -f k8s/01-mongo.yaml
           kubectl apply -f k8s/02-redis.yaml
-          
-          # Wait for Mongo pods to be ready before deploying services
+
+          # Wait for MongoDB StatefulSet to be ready
           echo "Waiting for MongoDB StatefulSet to be ready..."
-          kubectl wait --for=condition=ready pod -l app=mongo -n distributetmusicapp --timeout=300s || true
-          
-          # Apply Services/Deployments
+          kubectl wait --for=condition=ready pod -l app=mongo -n distributetmusicapp --timeout=600s || true
+
+          # Wait for MongoDB replica set initialization
+          echo "Waiting for MongoDB replica set initialization (90s)..."
+          sleep 90
+
+          # Apply application services
           kubectl apply -f k8s/03-catalog.yaml
           kubectl apply -f k8s/04-gateway.yaml
-          
-          # Force a restart to pull the freshly built images
-          kubectl rollout restart deployment apigateway -n distributetmusicapp
-          kubectl rollout restart deployment catalogservice -n distributetmusicapp
-          
-          # Wait for rollouts to complete
+
+          # Force rollout to pull fresh images
+          kubectl rollout restart deployment apigateway -n distributetmusicapp || true
+          kubectl rollout restart deployment catalogservice -n distributetmusicapp || true
+
+          # Wait for rollouts
           kubectl rollout status deployment apigateway -n distributetmusicapp --timeout=300s
           kubectl rollout status deployment catalogservice -n distributetmusicapp --timeout=300s
+
+      - name: Verify Deployment
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get all -n distributetmusicapp
+
+          echo ""
+          echo "=== PersistentVolumeClaims ==="
+          kubectl get pvc -n distributetmusicapp
+
+          echo ""
+          echo "=== MongoDB Replica Set Status ==="
+          kubectl exec -it mongo-0 -n distributetmusicapp -- mongosh --eval "rs.status().members.map(x => ({ name: x.name, state: x.stateStr }))" || true

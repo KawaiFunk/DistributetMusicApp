@@ -28,7 +28,7 @@ services:
     image: catalogservice.api
     build:
       context: .
-      dockerfile: CatalogServicec.Api/Dockerfile
+      dockerfile: CatalogService.Api/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
       ASPNETCORE_URLS: "http://+:8080"
@@ -48,9 +48,9 @@ services:
   catalogservice2.api:
     container_name: catalogservice2.api
     image: catalogservice.api
-    build:  
+    build:
       context: .
-      dockerfile: CatalogServicec.Api/Dockerfile
+      dockerfile: CatalogService.Api/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
       ASPNETCORE_URLS: "http://+:8080"

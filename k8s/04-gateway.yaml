@@ -58,7 +58,7 @@ metadata:
   name: apigateway
   namespace: distributetmusicapp
 spec:
-  replicas: 1
+  replicas: 2  # Increased from 1 to 2 for high availability
   selector:
     matchLabels:
       app: apigateway
@@ -69,7 +69,7 @@ spec:
     spec:
       containers:
         - name: apigateway
-          image: 071784445773.dkr.ecr.eu-north-1.amazonaws.com/musicapp-apigateway # REMEMBER TO USE YOUR ECR URI
+          image: PLACEHOLDER_ECR_REGISTRY/musicapp-apigateway:latest  # Will be replaced by GitHub Actions
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -106,4 +106,4 @@ spec:
     - port: 8080
       targetPort: 8080
       protocol: TCP
-  type: LoadBalancer # Creates the public AWS ELB
+  type: ClusterIP  # Changed from LoadBalancer - access via kubectl port-forward

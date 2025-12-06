@@ -1,0 +1,14 @@
+# ============ 00-storageclass.yaml (AWS EBS CSI StorageClass) ============
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ebs-sc-csi
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3  # General Purpose SSD v3 (better performance and cost than gp2)
+  fsType: ext4
+  encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer  # Ensures volume is created in same AZ as pod
+allowVolumeExpansion: true
+reclaimPolicy: Retain  # IMPORTANT: Prevents data loss on PVC deletion
+---
