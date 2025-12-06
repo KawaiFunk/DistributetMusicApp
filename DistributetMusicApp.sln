@@ -33,7 +33,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ApiGateway.Domain", "ApiGat
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ApiGateway.Infrastructure", "ApiGateway.Infrastructure\ApiGateway.Infrastructure.csproj", "{2AF021AE-52F5-4827-BBF8-94D60EBD6D12}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CatalogServicec.Api", "CatalogServicec.Api\CatalogServicec.Api.csproj", "{3C26107D-6FC2-4A7E-9152-8443EF681B47}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CatalogService.Api", "CatalogService.Api\CatalogService.Api.csproj", "{3C26107D-6FC2-4A7E-9152-8443EF681B47}"
 	ProjectSection(ProjectDependencies) = postProject
 		{1F5BC295-EC35-48D8-A304-52B719FE5D07} = {1F5BC295-EC35-48D8-A304-52B719FE5D07}
 	EndProjectSection
