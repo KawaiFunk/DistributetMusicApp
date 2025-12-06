@@ -15,7 +15,7 @@ data:
           "DownstreamScheme": "http",
           "DownstreamHostAndPorts": [
             {
-              "Host": "catalogservice", # Correct internal DNS name
+              "Host": "catalogservice"
               "Port": 8080
             }
           ],
@@ -31,7 +31,7 @@ data:
           "DownstreamScheme": "http",
           "DownstreamHostAndPorts": [
             {
-              "Host": "catalogservice", # Correct internal DNS name
+              "Host": "catalogservice",
               "Port": 8080
             }
           ],
