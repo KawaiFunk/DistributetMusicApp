@@ -106,4 +106,4 @@ spec:
     - port: 8080
       targetPort: 8080
       protocol: TCP
-  type: ClusterIP  # Changed from LoadBalancer - access via kubectl port-forward
+  type: LoadBalancer  # Changed from LoadBalancer - access via kubectl port-forward
